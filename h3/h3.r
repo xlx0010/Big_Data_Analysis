@@ -35,6 +35,8 @@ diamonds_tbl %>%
 
 ## Logistic Regression
 partitions <- tbl(sc, "diamonds") %>%
-    sdf_partition(training = 0.75, test = 0.25, seed = 1099)  
+    sdf_random_split(training = 0.75, test = 0.25, seed = 1099)  
+
+
 
 
