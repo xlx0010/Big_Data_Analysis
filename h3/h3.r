@@ -1,16 +1,17 @@
 
 library(ggplot2)
-data(diamonds) 
 
 library(sparklyr)
 library(dplyr)
 
 sc = spark_connect(master = "local")
-#data(baseball, package = 'plyr')
+
+## 1
+data(diamonds)
 diamonds_tbl = copy_to(sc, diamonds, overwrite = T)
 src_tbls(sc)
 
-## Linear Regression
+## 1/Linear Regression
 lr_model = 
     diamonds_tbl %>%
     #mutate(price_class = as.numeric(price>=3932.8)) %>%
@@ -33,9 +34,11 @@ diamonds_tbl %>%
     subtitle = "Use Spark.ML linear regression to predict price as a function of carat."
   )
 
-## Logistic Regression
+## 1/Logistic Regression
 partitions <- tbl(sc, "diamonds") %>%
     sdf_random_split(training = 0.75, test = 0.25, seed = 1099)  
+
+## 2
 
 
 
