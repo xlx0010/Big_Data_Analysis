@@ -39,6 +39,77 @@ partitions <- tbl(sc, "diamonds") %>%
     sdf_random_split(training = 0.75, test = 0.25, seed = 1099)  
 
 ## 2
+set.seed(106)
+m = matrix(rnorm (600*2) , ncol =2)
+m[1:200, 1] = m[1:200, 1] + 3
+m[401:600, 2] = m[401:600, 2] - 3
+data = data.frame(x = m[,1], y = m[,2])
+
+data_tbl = copy_to(sc, data, overwrite = T)
+
+partitions <- tbl(sc, "data") %>%
+  sdf_random_split(train = 0.8, test = 0.2, seed = 106)
+
+kmeans_model_3 <- partitions$train %>%
+  ml_kmeans(features=c("x", "y"), k = 3)
+
+predicted_3 <- ml_predict(kmeans_model, partitions$test) %>%
+  collect
+
+ml_predict(kmeans_model_3) %>%
+  collect() %>%
+  ggplot(aes(x, y)) +
+  geom_point(aes(x, y, col = factor(prediction + 1)),
+             size = 2, alpha = 0.5) + 
+  geom_point(data = kmeans_model_3$centers, aes(x, y),
+             col = scales::muted(c("red", "green", "blue")),
+             pch = 'x', size = 12) +
+  scale_color_discrete(name = "Predicted Cluster",
+                       labels = paste("Cluster", 1:3)) +
+  labs(
+    x = "x",
+    y = "y",
+    title = "K-Means Clustering",
+    subtitle = "K = 3"
+  )
+
+## 3
+
+data(baseball, package = 'plyr')
+baseball_tbl = copy_to(sc, baseball, overwrite = T)
+
+
+pca_model <- baseball_tbl %>%
+  # #select(g, ab, r, h, X2b, X3b, hr, rbi, sb, cs, bb, so) %>%
+  # summarise(
+  #   g = as.double(g),
+  #   ab = as.double(ab),
+  #   r = as.double(r)
+  # ) %>%
+  select(g, ab, r, h, X2b, X3b, hr, bb) %>%
+  ml_pca()
+
+# COMMAND ----------
+
+pca_model
+
+# COMMAND ----------
+
+pca_model$explained_variance
+
+# COMMAND ----------
+
+plot(pca_model$explained_variance/sum(pca_model$explained_variance), ylab="Prop. Variance Explained", xlab="Principle Component")
+lines(pca_model$explained_variance/sum(pca_model$explained_variance))
+
+# COMMAND ----------
+
+plot(cumsum(pca_model$explained_variance)/sum(pca_model$explained_variance), ylab="Cumulative Prop. Variance Explained", xlab="Principle Component")
+lines(cumsum(pca_model$explained_variance)/sum(pca_model$explained_variance))
+
+# COMMAND ----------
+
+summary(pca_model)
 
 
 
