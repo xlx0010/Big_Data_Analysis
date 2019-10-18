@@ -36,7 +36,19 @@ diamonds_tbl %>%
 
 ## 1/Logistic Regression
 partitions <- tbl(sc, "diamonds") %>%
-    sdf_random_split(training = 0.75, test = 0.25, seed = 1099)  
+    mutate(price_class = as.numeric(price >= 3932.8)) %>%
+    sdf_random_split(train = 0.75, test = 0.25, seed = 1099)  
+
+logit_model = partitions$train %>%
+    ml_logistic_regression(price_class ~ carat) 
+
+pred = ml_predict(logit_model, partitions$test) %>%  
+    collect  
+
+# Plot
+ggplot(pred, aes(x = carat, y = prediction)) +   
+geom_point() + theme(plot.title = element_text(hjust = 0.5)) +   
+coord_fixed(ratio = 1) +   labs(x = "corat", y = "price_class", title = "price_class vs. corat") 
 
 ## 2
 set.seed(106)
