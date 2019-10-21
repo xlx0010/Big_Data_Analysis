@@ -1,0 +1,233 @@
+---
+title: "Homework 3"
+author: "Lyuxin Xue 19210980106"
+date: "2019/10/21"
+output: word_document
+---
+
+```{r, include=FALSE}
+library(ggplot2)
+library(sparklyr)
+library(dplyr)
+sc = spark_connect(master = "local")
+```
+
+## 1.
+
+### linear regression
+In this part, I fit a regression model, with *price* as the response and *carat* as the predictor.
+
+`summary(lr_model)` gives us some estimations results of the model.
+
+We can see that the coefficient of *carat* is a positive value, meaning that with *carat* increasing, *price* will also increase, which is commonsensible.
+
+The *R-Squared* value is up to 0.8493. This high value indicates that a large proportion of the variability in the response *price* has been explained by the regression using *carat*.
+
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+data(diamonds)
+diamonds_tbl = copy_to(sc, diamonds, overwrite = T)
+
+lr_model = 
+    diamonds_tbl %>%
+    ml_linear_regression(response = "price", 
+                        features = c("carat"))
+
+summary(lr_model)
+```
+
+With the plot we can have an intuitive feeling with the regression model and the relation between the response and predictor.
+
+```{r, echo=FALSE}
+diamonds_tbl %>%
+  select(price, carat) %>%
+  ggplot(aes(carat, price)) +
+    geom_point(aes(carat, price), size = 2, alpha = 0.5) +
+    geom_abline(aes(slope = coef(lr_model)[["carat"]],
+                    intercept = coef(lr_model)[["(Intercept)"]]),
+                color = "red") +
+  labs(
+    x = "carat",
+    y = "price",
+    title = "Linear Regression: carat ~ price",
+    subtitle = "Use Spark.ML linear regression to predict price as a function of carat."
+  )
+```
+
+### logistic regression
+
+In this part I fit a logistic regression model to predict the *price* using *carat*.
+I define 3932 as the threshold for the price, which is basically the mean price, and divide it into “expensive” and “cheap”, respectively represented by 1 and 0.
+
+75% of the data was chosen randomly as training data and the rest was used to test the performance of the model.
+
+The positive value of *carat* means that the larger *carat* is, the more likely the diamond is expensive.
+
+Then I test the model with the test data. The result shows that it achieved an accuracy of 94.84%.
+
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+partitions <- tbl(sc, "diamonds") %>%
+    mutate(price_class = as.numeric(price >= 3932)) %>%
+    sdf_random_split(train = 0.75, test = 0.25, seed = 1099)  
+
+logit_model = partitions$train %>%
+    ml_logistic_regression(price_class ~ carat) 
+summary(logit_model)
+
+pred = ml_predict(logit_model, partitions$test) %>%  
+    collect  
+```
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+accuracy = 1 - mean((pred$prediction-pred$price_class)**2)
+accuracy
+```
+
+
+Here I plot the result on the test data. We can intuitively see the prediction results.
+```{r, echo=FALSE}
+ggplot(pred, aes(x = carat, y = prediction)) +   
+geom_point() + theme(plot.title = element_text(hjust = 0.5)) +   
+coord_fixed(ratio = 1) + labs(x = "corat", y = "price_class", title = "price_class vs. corat")
+```
+## 2.
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+set.seed(106)
+m = matrix(rnorm (600*2) , ncol =2)
+m[1:200, 1] = m[1:200, 1] + 3
+m[401:600, 2] = m[401:600, 2] - 3
+data = data.frame(x = m[,1], y = m[,2], class = c(rep(0, 200), rep(1,200), rep(2,200)))
+
+data_tbl = copy_to(sc, data, overwrite = T)
+
+partitions <- tbl(sc, "data") %>%
+  sdf_random_split(train = 0.8, test = 0.2, seed = 106)
+
+kmeans_model_2 <- partitions$train %>%
+  ml_kmeans(features=c("x", "y"), k = 2)
+
+kmeans_model_3 <- partitions$train %>%
+  ml_kmeans(features=c("x", "y"), k = 3)
+
+kmeans_model_4 <- partitions$train %>%
+  ml_kmeans(features=c("x", "y"), k = 4)
+```
+
+Here is the plots of the results corresponding to K=2,3,4.
+```{r, echo=FALSE}
+ml_predict(kmeans_model_2) %>%
+  collect() %>%
+  ggplot(aes(x, y)) +
+  geom_point(aes(x, y, col = factor(prediction + 1)),
+             size = 2, alpha = 0.5) + 
+  geom_point(data = kmeans_model_2$centers, aes(x, y),
+             col = scales::muted(c("red", "green")),
+             pch = 'x', size = 12) +
+  scale_color_discrete(name = "Predicted Cluster",
+                       labels = paste("Cluster", 1:2)) +
+  labs(
+    x = "x",
+    y = "y",
+    title = "K-Means Clustering",
+    subtitle = "K = 2"
+  )
+```
+```{r, echo=FALSE}
+ml_predict(kmeans_model_3) %>%
+  collect() %>%
+  ggplot(aes(x, y)) +
+  geom_point(aes(x, y, col = factor(prediction + 1)),
+             size = 2, alpha = 0.5) + 
+  geom_point(data = kmeans_model_3$centers, aes(x, y),
+             col = scales::muted(c("red", "green", "blue")),
+             pch = 'x', size = 12) +
+  scale_color_discrete(name = "Predicted Cluster",
+                       labels = paste("Cluster", 1:3)) +
+  labs(
+    x = "x",
+    y = "y",
+    title = "K-Means Clustering",
+    subtitle = "K = 3"
+  )
+```
+
+```{r, echo=FALSE}
+ml_predict(kmeans_model_4) %>%
+  collect() %>%
+  ggplot(aes(x, y)) +
+  geom_point(aes(x, y, col = factor(prediction + 1)),
+             size = 2, alpha = 0.5) + 
+  geom_point(data = kmeans_model_4$centers, aes(x, y),
+             col = scales::muted(c("red", "green", "blue", "yellow")),
+             pch = 'x', size = 12) +
+  scale_color_discrete(name = "Predicted Cluster",
+                       labels = paste("Cluster", 1:4)) +
+  labs(
+    x = "x",
+    y = "y",
+    title = "K-Means Clustering",
+    subtitle = "K = 4"
+  )
+```
+
+
+Finally I test the model on test data with K=3, and achieved an accuracy of 91.06%.
+
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+predicted_3 <- ml_predict(kmeans_model_3, partitions$test) %>%
+  collect
+accuracy = mean(predicted_3$prediction == predicted_3$class)
+accuracy
+```
+
+## 3.
+
+```{r, include=FALSE}
+data(baseball, package = 'plyr')
+baseball_tbl = copy_to(sc, baseball, overwrite = T)
+```
+
+In this part I fit a PCA model on baseball data.
+I chose *g, ab, r, h, X2b, X3b, hr, bb* as variables.
+
+According to **explained_variance**, the first PC is enough to explain above 95% variance.
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+pca_model <- baseball_tbl %>%
+  select(g, ab, r, h, X2b, X3b, hr, bb) %>%
+  ml_pca()
+
+pca_model$explained_variance
+```
+
+PVE, CVE plots are as below.
+
+```{r, echo=FALSE}
+plot(pca_model$explained_variance/sum(pca_model$explained_variance), ylab="Prop. Variance Explained", xlab="Principle Component")
+lines(pca_model$explained_variance/sum(pca_model$explained_variance))
+```
+
+```{r, echo=FALSE}
+plot(cumsum(pca_model$explained_variance)/sum(pca_model$explained_variance), ylab="Cumulative Prop. Variance Explained", xlab="Principle Component")
+lines(cumsum(pca_model$explained_variance)/sum(pca_model$explained_variance))
+```
+Then I calculated the sample covariance matrix *S* locally and get the eigenvalues.
+
+When choosing the number of PCs, we normally set a refactoring threshold as 95%, and choose the minimum number of PCs satisfying that the proportion of sum of PCs reaches at least 95%.
+
+Inspecting *eigen_values* of *S*, we can see that the proportion of the first eigenvalue reaches 99.19%, which is consistent with the result computed by `ml_pca()` that the PVE of the first PC is 98.69%.
+
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+X_tbl <- baseball_tbl %>%
+  select(g, ab, r, h, X2b, X3b, hr, bb) %>%
+  collect()
+X = as.matrix(X_tbl)
+S = t(X) %*% X
+eigen_values = eigen(S)$values
+
+eigen_values
+```
+```{r, warning=FALSE, error=FALSE, message=FALSE}
+sum(eigen_values[1:1])/sum(eigen_values)
+```
+
+## 4.
+
+

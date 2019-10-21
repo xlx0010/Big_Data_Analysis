@@ -18,7 +18,7 @@ lr_model =
     ml_linear_regression(response = "price", 
                         features = c("carat"))
 
-summary(lrModel_carat_price)
+summary(lr_model)
 
 diamonds_tbl %>%
   select(price, carat) %>%
@@ -123,6 +123,36 @@ lines(cumsum(pca_model$explained_variance)/sum(pca_model$explained_variance))
 
 summary(pca_model)
 
+# local compute
+X_tbl <- baseball_tbl %>%
+  select(g, ab, r, h, X2b, X3b, hr, bb) %>%
+  collect()
+X = as.matrix(X_tbl)
+S = t(X) %*% X
+eigen_values = eigen(S)$values
+
+sum(eigen_values[1:1])/sum(eigen_values)
+
+## 4
+
+train = data.frame(age=c(0,0,1,2,2,2,1,0,0,2,0,1,1),
+                      income=c(3,3,3,2,1,1,1,2,1,2,2,2,3),
+                      credit=c(0,1,0,0,0,1,1,0,0,0,1,1,0),
+                      buyer=c(0,0,1,1,1,0,1,0,1,1,1,1,1))
+test <- data.frame(age=c(0),
+                   income=c(2),
+                   credit=c(0))
+train_tbl = copy_to(sc, train, overwrite = T)
+test_tbl = copy_to(sc, test, overwrite = T)
+
+nb_model <- train_tbl %>% 
+  ml_naive_bayes(buyer ~ .)
+
+pred <- ml_predict(nb_model, test_tbl)
+#ml_multiclass_classification_evaluator(pred)
+
+pred_res=collect(pred)
+pred_res$probability
 
 
 
